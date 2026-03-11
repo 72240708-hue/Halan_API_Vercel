@@ -112,15 +112,93 @@ $app->delete('/delete', function (Request $request, Response $response) {
         
     });
 
-
-
+    //contoh filtering data 
     $app->get('/readobat', function (Request $request, Response $response) {
+
+    $params = $request->getQueryParams();
     $db = $this->get('db');
-    $result = $db->table('obat')->get();
+
+    $query = $db->table('obat');
+
+    // search sku
+    if (!empty($params['search'])) {
+        $searchTerm = $params['search'];
+        $query->where('sku', 'like', "%$searchTerm%");
+    }
+
+    // filter jumlah
+    if (!empty($params['jumlah'])) {
+        $query->where('jumlah', $params['jumlah']);
+    }
+
+    // filter label
+    if (!empty($params['label'])) {
+        $query->where('label_catatan', $params['label']);
+    }
+
+    $hasil = $query->get();
+
+    $response->getBody()->write(json_encode($hasil));
+    return $response->withHeader('Content-Type', 'application/json');
+});
+
+
+
+    $app->get('/obat', function (Request $request, Response $response) {
+    $params = $request->getQueryParams();
+
+    //tentukan parameter untuk pagination
+    $page = isset($params['page']) ? (int)$params['page'] : 1;
+    $perPage = isset($params['per_page']) ? (int)$params['per_page'] : 10;
+    $offset = ($page - 1) * $perPage;
+
+    //inisialisasi query builder
+    $db = $this->get('db');
+    $query = $db->table('obat');
+
+    //filter/search
+    if (!empty($params['search'])) {
+        $searchTerm = $params['search'];
+        $query->where('sku', 'like', "%$searchTerm%");
+    }
+
+    //hitung total data untuk pagination
+    $totaldata = $query->count();
+    $totalpage = ceil($totaldata / $perPage);
+
+    //ambil data dengan limit dan offset untuk pagination
+    $data = $query->limit($perPage)
+    ->offset($offset)   
+    ->orderBy('id_obat', 'desc')
+    ->get();   
+
+    //susun response dengan format pagination
+    $result = [
+        'status' => 'success',
+        'pagination' => [
+            'current_page' => $page,
+            'per_page' => $perPage, 
+            'total_data' => $totaldata,
+            'total_page' => $totalpage
+        ],
+        'data' => $data
+    ];
+
+    
 
     $response->getBody()->write(json_encode($result));
     return $response->withHeader('Content-Type', 'application/json');
 });
+
+
+
+//     $app->get('/readobat', function (Request $request, Response $response) {
+//     $db = $this->get('db');
+//     $result = $db->table('obat')->get();
+
+//     $response->getBody()->write(json_encode($result));
+//     return $response->withHeader('Content-Type', 'application/json');
+// });
 
 $app->post('/createobat', function (Request $request, Response $response) {
     $db = $this->get('db');
