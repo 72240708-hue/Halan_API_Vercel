@@ -505,6 +505,7 @@ $app->put('/latihan_updatestok', function (Request $request, Response $response)
     return $response->withHeader('Content-Type', 'application/json');
     }); 
 
+    
     // NO 10  Detail Transaksi dengan Item Terjual Gunakan tabel penjualan dan penjualan_detail. Buatlah API untuk melihat satu transaksi yang di dalamnya berisi daftar barang yang dibeli (nesting data).
 $app->get('/penjualan/{id}', function (Request $request, Response $response, $args) {
     $db = $this->get('db');
@@ -549,7 +550,230 @@ $app->get('/penjualan/{id}', function (Request $request, Response $response, $ar
     $response->getBody()->write(json_encode($result));
     return $response->withHeader('Content-Type', 'application/json');
 });
+
+//SOAL UJIAN NO 1 
+$app->get('/health', function ($request, $response) {
+        $data = [
+            'code' => 200,
+            'message' => 'Library API Server is Healthy',
+            'uptime' => '99.9%',
+        ];
+        $response->getBody()->write(json_encode($data));
+        return $response->withHeader('Content-Type', 'application/json');
+    });
+
+//SOAL UJIAN NO 2
+$app->get('/me', function (Request $request, Response $response) {
+        $data = [
+            'member_id' => 'LIB-9901',
+            'full_name' => 'Agus Dermawan',
+            'major' => 'Sistem Informasi',
+            "active_status" => "true"
+        ];
+        $response->getBody()->write(json_encode($data));
+        return $response->withHeader('Content-Type', 'application/json');
+    });
     
+//SOAL UJIAN NO 3
+$app->post('/feedback', function (Request $request, Response $response) {
+        $data = $request->getParsedBody();
+        $responseData = [
+            "info" => "Feedback Received",
+            'your_message' => "Terima Sangat Membantu!",
+            "received_at" => date('Y-m-d H:i:s')
+        ];
+        $response->getBody()->write(json_encode($responseData));
+        return $response->withHeader('Content-Type', 'application/json');
+    }); 
+
+//SOAL UJIAN NO 4
+$app->delete('/booking/{id}', function (Request $request, Response $response, $args) {
+        $id = $args['id'];
+        $responseData = [
+            "booking_code" => "$id",
+            'status' => "CANCELED",
+            'details' => "Booking has been removed from the queue"
+        ];
+        $response->getBody()->write(json_encode($responseData));
+        return $response->withHeader('Content-Type', 'application/json');
+    }); 
+
+//SOAL UJIAN NO 5
+$app->post('/input_buku', function (Request $request, Response $response) {
+        $data = $request->getParsedBody();
+        $db = $this->get('db');
+        $id_buku = $db->table('buku')->insertGetId([
+            'id_buku' => $data['id_buku'],
+            'judul_buku' => $data['judul_buku'],
+            'penulis' => $data['penulis'],
+            'tahun_terbit' => $data['tahun_terbit']
+        ]);
+        $responseData = [
+            "status" => "success",
+            "new_entry" => [
+                'id_buku' => $data['id_buku'],
+                'judul_buku' => $data['judul_buku'],
+                'penulis' => $data['penulis'],
+                'tahun_terbit' => $data['tahun_terbit']
+            ]
+        ];
+        $response->getBody()->write(json_encode($responseData));
+        return $response->withHeader('Content-Type', 'application/json');
+    });
+
+//SOAL UJIAN NO 6
+$app->put('/updaterakbuku', function (Request $request, Response $response) {
+    
+        $data = json_decode($request->getBody()->getContents(), true);
+        $db = $this->get('db');
+        $db->table('buku')
+        ->where('id_buku', $data['id_buku'])
+        ->update([
+            'judul_buku' => $data['judul_buku'],
+            'rak' => $data['rak']
+        ]);
+        $responseData = [ 
+            "update_status" => true,
+            "message" => "Book location updated for ID ".$data['id_buku'],
+            "total_updated" => 1
+        ];  
+        $response->getBody()->write(json_encode($responseData));
+        return $response->withHeader('Content-Type', 'application/json');
+    });
+
+//SOAL UJIAN NO 7
+ $app->get('/loans', function (Request $request, Response $response) {
+        $db = $this->get('db');
+        $join = $db->table('peminjaman')
+                    ->join('buku', 'peminjaman.id_buku', '=', 'buku.id_buku')
+                    ->select('peminjaman.id_pinjam', 'peminjaman.tgl_pinjam', 'buku.judul_buku', 'peminjaman.isbn_code')
+                    ->get();
+
+    $hasil = $join->map(function ($item) {
+        return [
+            'id_pinjam' => $item->id_pinjam,
+            'tgl_pinjam' => $item->tgl_pinjam,
+            'judul_buku' => $item->judul_buku,
+            'isbn_code' => $item->isbn_code
+        ];
+    });
+        $response->getBody()->write(json_encode($hasil));
+        return $response->withHeader('Content-Type', 'application/json');
+    }); 
+
+
+//SOAL UJIAN NO 8
+$app->get('/shift/{id}', function (Request $request, Response $response) {
+        $db = $this->get('db');
+        $join = $db->table('petugas')
+                    ->join('transaksi', 'petugas.id_petugas', '=', 'transaksi.id_petugas')
+                    ->select('petugas.id_petugas', 'petugas.nama_petugas', 'petugas.shift_kerja', 'transaksi.id_transaksi', 'transaksi.jenis_transaksi')
+                    ->where('petugas.id_petugas', $request->getAttribute('id'))
+                    ->get();
+
+    $hasil = $join->map(function ($item) {
+        return [
+            'id_transaksi' => $item->id_transaksi,
+            'jenis_transaksi' => $item->jenis_transaksi,
+            'nama_petugas' => $item->nama_petugas,
+            'shift_kerja' => $item->shift_kerja
+        ];
+    });
+        $response->getBody()->write(json_encode($hasil));
+        return $response->withHeader('Content-Type', 'application/json');
+    }); 
+
+//SOAL UJIAN NO 9
+ $app->get('/daftar_penerbit', function (Request $request, Response $response) {
+        $db = $this->get('db');
+        $join = $db->table('penerbit')
+                    ->join('buku', 'penerbit.id_penerbit', '=', 'buku.id_penerbit')
+                    ->select('penerbit.id_penerbit', 'penerbit.nama_penerbit', 'penerbit.negara', 'buku.id_buku', 'buku.judul_buku')
+                    ->get();
+
+     $grouped = [];
+
+    foreach ($join as $item) {
+        $id = $item->id_penerbit;
+
+        if (!isset($grouped[$id])) {
+            $grouped[$id] = [
+                'publisher_name' => $item->nama_penerbit,
+                'origin' => $item->negara,
+                'collections' => []
+            ];
+        }
+
+        $grouped[$id]['collections'][] = [
+            'judul_buku' => $item->judul_buku,
+            'harga_sewa' => 2000
+        ];
+    }
+
+    $hasil = array_values($grouped);
+
+    $response->getBody()->write(json_encode($hasil));
+    return $response->withHeader('Content-Type', 'application/json');
+    }); 
+
+
+// SOAL NO 10
+$app->get('/denda', function (Request $request, Response $response) {
+        $db = $this->get('db');
+        $join = $db->table('denda')
+                    ->join('denda_detail', 'denda.id_denda', '=', 'denda_detail.id_denda')
+                    ->select('denda.id_denda', 'denda.nama_anggota','denda.total_tagihan', 'denda_detail.id_detail', 'denda_detail.judul_buku_telat', 'denda_detail.hari_telat', 'denda_detail.denda_per_buku')
+                    ->get();
+
+     $grouped = [];
+
+    foreach ($join as $item) {
+        $id = $item->id_denda;
+
+        if (!isset($grouped[$id])) {
+            $grouped[$id] = [
+                'member' => $item->nama_anggota,
+                'total_fine' => $item->total_tagihan,
+                'overdue_details' => []
+            ];
+        }
+
+        $grouped[$id]['overdue_details'][] = [
+            'book_title' => $item->judul_buku_telat,
+            'days' => $item->hari_telat,
+            'fine' => $item->denda_per_buku
+        ];
+    }
+
+    $hasil = array_values($grouped);
+
+    $response->getBody()->write(json_encode($hasil));
+    return $response->withHeader('Content-Type', 'application/json');
+    }); 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -568,16 +792,6 @@ $app->get('/penjualan/{id}', function (Request $request, Response $response, $ar
         $group->get('/{id}', ViewUserAction::class);
     });
 
-    $app->get('/health', function ($request, $response) {
-        $data = [
-            'status' => 'ok',
-            'message' => 'API is running'
-        ];
-
-
-        $response->getBody()->write(json_encode($data));
-        return $response->withHeader('Content-Type', 'application/json');
-    });
 };
 
 
@@ -602,13 +816,4 @@ $app->get('/penjualan/{id}', function (Request $request, Response $response, $ar
         $group->get('/{id}', ViewUserAction::class);
     });
 
-    $app->get('/health', function ($request, $response) {
-        $data = [
-            'status' => 'ok',
-            'message' => 'API is running'
-        ];
-
-
-        $response->getBody()->write(json_encode($data));
-        return $response->withHeader('Content-Type', 'application/json');
-    });
+    
