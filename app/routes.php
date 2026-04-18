@@ -9,6 +9,8 @@ use Psr\Http\Message\ServerRequestInterface as Request;
 //use Illuminate\Database\Capsule\Manager as DB;
 use Slim\App;
 use Slim\Interfaces\RouteCollectorProxyInterface as Group;
+use Respect\Validation\Validator as v;
+use Respect\Validation\Exceptions\NestedValidationException;
 
 return function (App $app) {
     
@@ -200,33 +202,172 @@ $app->delete('/delete', function (Request $request, Response $response) {
 //     return $response->withHeader('Content-Type', 'application/json');
 // });
 
+// $app->post('/createobat', function (Request $request, Response $response) {
+//     $db = $this->get('db');
+//     $data = $request->getParsedBody();
+//     $id_obat = $db->table('obat')->insertGetId([
+//         'sku' => $data['sku'],
+//         'label_catatan' => $data['label_catatan'],
+//         'jumlah' => $data['jumlah']
+//     ]);
+//    $result = $db->table('obat')->where('id_obat', $id_obat)->first();
+//     $response->getBody()->write(json_encode($result));
+//     return $response->withHeader('Content-Type', 'application/json');
+// });
+
+// SOAL MINGGU 8 
 $app->post('/createobat', function (Request $request, Response $response) {
     $db = $this->get('db');
-    $data = $request->getParsedBody();
-    $id_obat = $db->table('obat')->insertGetId([
-        'sku' => $data['sku'],
-        'label_catatan' => $data['label_catatan'],
-        'jumlah' => $data['jumlah']
-    ]);
-   $result = $db->table('obat')->where('id_obat', $id_obat)->first();
-    $response->getBody()->write(json_encode($result));
-    return $response->withHeader('Content-Type', 'application/json');
+    $data = $request->getParsedBody() ?? [];
+
+    $validator = v::key('sku', v::stringType()->notEmpty())
+        ->key('label_catatan', v::optional(v::stringType()))
+        ->key('jumlah', v::intVal()->min(1));
+
+    try {   
+        $validator->assert($data);
+
+         $id_obat = $db->table('obat')->insertGetId([
+            'sku' => $data['sku'],
+            'label_catatan' => $data['label_catatan'] ?? null,
+            'jumlah' => $data['jumlah']
+        ]);
+        $result = $db->table('obat')->where('id_obat', $id_obat)->first();
+        $response->getBody()->write(json_encode([
+            'message' => "Data obat berhasil ditambahkan",
+            'data' => $result
+        ]));
+        return $response->withStatus(200)->withHeader('Content-Type', 'application/json');
+
+    } catch (NestedValidationException $e) {
+        $errors = $e->getMessages([
+            "sku" => 'SKU tidak boleh kosong',
+            "label_catatan" => 'Label ga boleh kosong',
+            "jumlah" => 'Jumlah minimal adalah 1'
+        ]);
+        
+        $payload = json_encode([ 
+            'status' => 'fail',
+            'message' => "Validasi gagal",
+             'errors' => array_filter($errors) 
+        ]);
+        $response->getBody()->write($payload);
+
+        return $response->withStatus(422)->withHeader('Content-Type', 'application/json');
+    } catch (\Exception $e){
+        $response->getBody()->write(json_encode([
+            'message' => "Error: " . $e->getMessage()
+        ]));
+        return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
+    }
 });
 
-$app->put('/updateobat', function (Request $request, Response $response) {
-    $db = $this->get('db');
-    $data = $request->getParsedBody();
-    $db->table('obat')
-    ->where('id_obat', $data['id_obat'])
-    ->update([
-        'sku' => $data['sku'],
-        'label_catatan' => $data['label_catatan'],
-        'jumlah' => $data['jumlah']
-    ]);
-   $result = $db->table('obat')->where('id_obat', $data['id_obat'])->first();
-    $response->getBody()->write(json_encode($result));
-    return $response->withHeader('Content-Type', 'application/json');
+
+// SOAL MINGGU 8 
+$app->put('/updateobat/{id}', function (Request $request, Response $response, array $args) {
+
+    //validasi manual
+    $data = $request->getParsedBody() ?? [];
+    // if (empty($data['sku']) ){
+    //     $response->getBody()->write(json_encode([
+    //         'debug_info' => 'SKU kosong di level php',
+    //         'data_received' => $data,
+    //     ]));
+    //     return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+    // }
+
+    $id = $args['id'];
+
+    //gunakan validator dan set rule
+    $validator = v::key('sku', v::stringType()->notEmpty())
+        ->key('label_catatan', v::optional(v::stringType()))
+        ->key('jumlah', v::intVal()->min(1));
+
+    try {
+
+        //jalankan validasi
+        //paksa lempar error jika sku kosong atau tidak sesuai rule
+
+        if(!isset($data['sku']) || $data['sku'] === ''){
+            throw new \Exception('SKU tidak boleh kosong');
+        }
+
+        $validator->assert($data);
+        
+        $check = $this->get('db')->table('obat')->where('id_obat', $id)->first();
+        if (!$check){
+            $response->getBody()->write(json_encode([
+                'message' => "Data obat tidak ditemukan" ]));
+            return $response->withStatus(404)->withHeader('Content-Type', 'application/json');
+        }
+
+        $this->get('db')->table('obat')->where('id_obat', $id)->update([
+            'sku' => $data['sku'],
+            'label_catatan' => $data['label_catatan'] ?? null,
+            'jumlah' => $data['jumlah']
+        ]);
+
+        $result = $this->get('db')->table('obat')->where('id_obat', $id)->first();
+        $response->getBody()->write(json_encode([
+            'message' => "Data obat berhasil diupdate",
+            'data' => $result
+        ]));
+
+        //berikan status code 200 secara eksplisit
+        return $response->withStatus(200)->withHeader('Content-Type', 'application/json');
+
+
+    } catch (NestedValidationException $e) {
+        //tangkap error validasi
+        // $errors = $e->getFullMessage(); // untuk debugging
+
+        $errors = $e->getMessages([
+            "sku" => 'SKU tidak boleh kosong',
+            "label_catatan" => 'Label ga boleh kosong',
+            "jumlah" => 'Jumlah minimal adalah 1'
+        ]);
+        
+        $payload = json_encode([ 
+            'status' => 'fail',
+            'message' => "Validasi gagal",
+            // 'errors' => $e ->getMessages()
+             'errors' => array_filter($errors) 
+        ]);
+        $response->getBody()->write($payload);
+
+        //harus respond dengan status code 422 Unprocessable Entity untuk error validasi
+        return $response->withStatus(422)->withHeader('Content-Type', 'application/json');
+
+
+    } catch (\Exception $e){
+        //tangkap error lain yang mungkin terjadi
+        $response->getBody()->write(json_encode([
+            'message' => "Error: " . $e->getMessage()
+        ]));
+        return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
+    }
 });
+
+
+
+
+
+
+
+// $app->put('/updateobat', function (Request $request, Response $response) {
+//     $db = $this->get('db');
+//     $data = $request->getParsedBody();
+//     $db->table('obat')
+//     ->where('id_obat', $data['id_obat'])
+//     ->update([
+//         'sku' => $data['sku'],
+//         'label_catatan' => $data['label_catatan'],
+//         'jumlah' => $data['jumlah']
+//     ]);
+//    $result = $db->table('obat')->where('id_obat', $data['id_obat'])->first();
+//     $response->getBody()->write(json_encode($result));
+//     return $response->withHeader('Content-Type', 'application/json');
+// });
 
 $app->delete('/deleteobat', function (Request $request, Response $response) {
     $db = $this->get('db');
