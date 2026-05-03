@@ -12,8 +12,46 @@ use Slim\Interfaces\RouteCollectorProxyInterface as Group;
 use Respect\Validation\Validator as v;
 use Respect\Validation\Exceptions\NestedValidationException;
 
-return function (App $app) {
-    
+return function (\Slim\App $app) {
+
+//Route untuk menggenerate swagger JSON
+ $app->get('/swagger.json', function (
+        Request $request,
+        Response $response
+    ) {
+
+        $generator = new \OpenApi\Generator();
+
+        $openapi = $generator->generate([
+            __DIR__.'/../app',
+            __DIR__.'/../src'
+        ]);
+
+        if($openapi){
+            $response->getBody()->write(
+                $openapi->toJson()
+            );
+        }
+
+        return $response
+            ->withHeader(
+                'Content-Type',
+                'application/json'
+            )
+            ->withHeader(
+                'Access-Control-Allow-Origin',
+                '*'
+            )
+            ->withHeader(
+                'Access-Control-Allow-Methods',
+                'GET, POST, PUT, DELETE, PATCH, OPTIONS'
+            )
+            ->withHeader(
+                'Access-Control-Allow-Headers',
+                'X-Requested-With, Content-Type, Accept, Origin, Authorization'
+            );
+    });
+
 //menampilkan data rekam medis dari database
 $app->get('/crud', function (Request $request, Response $response) {
     $db = $this->get('db');
@@ -620,7 +658,7 @@ $app->put('/latihan_updatestok', function (Request $request, Response $response)
                     ->join('obat_latuts', 'kategori_obat.id_kategori', '=', 'obat_latuts.id_kategori')
                     ->select('kategori_obat.id_kategori', 'kategori_obat.nama_kategori', 'obat_latuts.id_obat', 'obat_latuts.nama_obat', 'obat_latuts.harga')
                     ->get();
-
+    
      $grouped = [];
 
     foreach ($join as $item) {
@@ -704,7 +742,7 @@ $app->get('/health', function ($request, $response) {
     });
 
 //SOAL UJIAN NO 2
-$app->get('/me', function (Request $request, Response $response) {
+$app->get('/member', function (Request $request, Response $response) {
         $data = [
             'member_id' => 'LIB-9901',
             'full_name' => 'Agus Dermawan',
@@ -894,7 +932,37 @@ $app->get('/denda', function (Request $request, Response $response) {
 
 
 
+$app->get('/mahasiswa', function (Request $request, Response $response) {
+    $db = $this->get('db');
+    $hasil = $db->table('Mahasiswa')->get();
 
+     $data = $hasil->map(function ($item) {
+        return [
+            'Nama' => $item->Nama,
+            'Semester' => $item->Semester,
+            'Nim' => $item->Nim,
+        ];
+    }); 
+
+    $response->getBody()->write(json_encode($data));
+    return $response->withHeader('Content-Type', 'application/json');
+});
+
+//menambahkan data rekam medis ke database
+$app->post('/postmhs', function (Request $request, Response $response) {
+    $db = $this->get('db');
+    $data = $request->getParsedBody();
+    $id = $db->table('Mahasiswa')->insertGetId([
+        'Nama' => $data['Nama'],
+        'Nim' => $data['Nim'],
+        'Semester' => $data['Semester']
+    ]);
+   $result = $db->table('Mahasiswa')->where('Nim', $id)->first();
+    $response->getBody()->write(json_encode($result));
+    return $response->withHeader('Content-Type', 'application/json');
+});
+        
+  
 
 
 

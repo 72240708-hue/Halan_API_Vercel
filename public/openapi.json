@@ -1,0 +1,27 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "API Halan",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/resep": {
+      "get": {
+        "summary": "Ambil data resep",
+        "responses": {
+          "200": {
+            "description": "Sukses"
+          }
+        }
+      },
+      "post": {
+        "summary": "Tambah resep",
+        "responses": {
+          "200": {
+            "description": "Berhasil tambah"
+          }
+        }
+      }
+    }
+  }
+}
