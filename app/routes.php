@@ -14,6 +14,114 @@ use Respect\Validation\Exceptions\NestedValidationException;
 
 return function (\Slim\App $app) {
 
+$app->get('/obat-secure', function (Request $request, Response $response) {
+        // Ambil kredensial (mendukung Basic Auth atau Custom Header)
+        $serverParams = $request->getServerParams();
+        $username = $serverParams['PHP_AUTH_USER'] ?? $request->getHeaderLine('Username');
+        $password = $serverParams['PHP_AUTH_PW'] ?? $request->getHeaderLine('Password');
+
+        // Pengecekan jika kredensial kosong
+        if (empty($username) || empty($password)) {
+            $response->getBody()->write(json_encode([
+                "status" => "error",
+                "message" => "Autentikasi Diperlukan. Harap Sertakan username dan password."
+            ]));
+            return $response->withStatus(401)
+                ->withHeader('WWW-Authenticate', 'Basic realm="Protected Area"')
+                ->withHeader('Content-Type', 'application/json');
+        }
+
+        // Cek Username di tabel user role
+        $db = $this->get('db');
+    $user = $db->table('user_role')->where('username', $username)->first();
+
+        // Verifikasi password (password pada database sudah di hash, misal dengan password_verify)
+        if (!$user || !password_verify($password, $user->password)) {
+            $response->getBody()->write(json_encode([
+                "status" => "error",
+                "message" => "Username atau password salah. Akses ditolak."
+            ]));
+            return $response->withStatus(403)->withHeader('Content-Type', 'application/json');
+        }
+
+        // Jika autentikasi berhasil, lanjutkan untuk mengambil data obat
+        $dataObat = $db->table('obat')->get();
+        $response->getBody()->write(json_encode([
+            "status" => "success",
+            "message" => "Berhasil mengambil data obat.",
+            "data" => $dataObat
+        ]));
+        return $response->withHeader('Content-Type', 'application/json');
+
+    });
+
+    $app->post('/login-jwt', function (Request $request, Response $response) {
+        $data = $request->getParsedBody();
+        $username = $data['username'] ?? '';
+        $password = $data['password'] ?? '';
+
+        if (empty($username) || empty($password)) {
+            $response->getBody()->write(json_encode([
+                "status" => "error",
+                "message" => "Username dan password harus diisi."
+            ]));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+        $db = $this->get('db');
+        $user = $db->table('user_role')->where('username', $username)->first();
+
+        // Verifikasi password salah (password pada database sudah di hash, misal dengan password_verify)
+        if (!$user || !password_verify($password, $user->password)) {
+            $response->getBody()->write(json_encode([
+                "status" => "error",
+                "message" => "Username atau password salah."
+            ]));
+            return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
+        }
+
+        //kunci rahasia untuk JWT (sebaiknya disimpan di .env)
+        $secretKey = "bonagantengbgt";
+
+        $payload = [
+            "iat" => time(), // Issued at
+            "exp" => time() + (60 * 60) ,// Expiration time (1 jam)
+            "sub" => $user->username // Subject (ID pengguna)
+        ];
+
+        //generate token
+        $token = \Firebase\JWT\JWT::encode($payload, $secretKey, 'HS256');
+        $response->getBody()->write(json_encode([
+            "status" => "success",
+            "message" => "Login berhasil",
+            "token" => $token
+        ]));
+        return $response->withHeader('Content-Type', 'application/json');
+
+    });
+
+     $app->get('/obat-jwt', function (Request $request, Response $response) {
+      $db = $this->get('db');
+      $dataObat = $db->table('obat')->get();
+
+      $response->getBody()->write(json_encode([
+          "status" => "success",
+          "message" => "Berhasil mengambil data obat.",
+          "data" => $dataObat
+      ]));
+        return $response->withStatus(200)->withHeader('Content-Type', 'application/json');
+       
+    })->add(new \Tuupola\Middleware\JwtAuthentication([
+        "secret" => "bonagantengbgt",
+        "error" => function ($response, $arguments) {
+            $data["status"] = "error";
+            $data["message"] = $arguments["message"];
+            $response->getBody()->write(json_encode($data, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)
+            );
+              return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
+        }
+    ]));
+};
+
 //Route untuk menggenerate swagger JSON
  $app->get('/swagger.json', function (
         Request $request,
@@ -72,7 +180,7 @@ $app->post('/resep', function (Request $request, Response $response) {
         'berat' => $data['berat'],
         'dokter' => $data['dokter'],
         'status_obat' => $data['status_obat'],
-        'tanggal_date' => $data['tanggal_date']
+        'tanggal' => $data['tanggal']
     ]);
    $result = $db->table('rekam_medis')->where('id_rm', $id)->first();
     $response->getBody()->write(json_encode($result));
@@ -93,7 +201,7 @@ $app->put('/update', function (Request $request, Response $response) {
         'berat' => $data['berat'],
         'dokter' => $data['dokter'],
         'status_obat' => $data['status_obat'],
-        'tanggal_date' => $data['tanggal_date']
+        'tanggal' => $data['tanggal']
     ]);
    $result = $db->table('rekam_medis')->where('id_rm', $data['id_rm']  )->first();
     $response->getBody()->write(json_encode($result));
@@ -446,14 +554,14 @@ $app->post('/createresep', function (Request $request, Response $response) {
 $app->post('/createdtl_resep', function (Request $request, Response $response) {
     $db = $this->get('db');
     $data = $request->getParsedBody();
-    $id_dtl_resep = $db->table('detail_resep')->insertGetId([
+    $id_detail = $db->table('detail_resep')->insertGetId([
         'id_resep' => $data['id_resep'],
         'id_obat' => $data['id_obat'],
         'jumlah' => $data['jumlah'],
         'dosis' => $data['dosis'],
         'keterangan' => $data['keterangan']
     ]);
-   $result = $db->table('detail_resep')->where('id_detail', $id_dtl_resep)->first();
+   $result = $db->table('detail_resep')->where('id_detail', $id_detail)->first();
     $response->getBody()->write(json_encode($result));
     return $response->withHeader('Content-Type', 'application/json');
 });
@@ -1001,7 +1109,7 @@ $app->post('/postmhs', function (Request $request, Response $response) {
         $group->get('/{id}', ViewUserAction::class);
     });
 
-};
+
 
 
 

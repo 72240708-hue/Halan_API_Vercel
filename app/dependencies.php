@@ -35,7 +35,7 @@ return function (ContainerBuilder $containerBuilder) {
                 'driver' => 'mysql',
                 'host' => 'localhost',
                 'port' => 3306,
-                'database' => 'crud',
+                'database' => 'api',
                 'username' => 'root',
                 'password' => '',
                 'charset' => 'utf8',
