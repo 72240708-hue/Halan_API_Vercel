@@ -14,6 +14,8 @@ use Respect\Validation\Exceptions\NestedValidationException;
 
 return function (\Slim\App $app) {
 
+
+
 $app->get('/obat-secure', function (Request $request, Response $response) {
         // Ambil kredensial (mendukung Basic Auth atau Custom Header)
         $serverParams = $request->getServerParams();
@@ -85,7 +87,10 @@ $app->get('/obat-secure', function (Request $request, Response $response) {
         $payload = [
             "iat" => time(), // Issued at
             "exp" => time() + (60 * 60) ,// Expiration time (1 jam)
-            "sub" => $user->username // Subject (ID pengguna)
+            "sub" => $user->username, // Subject (ID pengguna)
+            "uid" => $user->id ?? 1 ,// ID user untuk pengecekan resource (asumsi table user_role punya kolom id)
+             "role" => $user->role ?? 'apoteker' // Role pengguna untuk manajemen akses 
+
         ];
 
         //generate token
@@ -120,7 +125,84 @@ $app->get('/obat-secure', function (Request $request, Response $response) {
               return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
         }
     ]));
-};
+
+    // 3. Hanya bisa diakses oleh user dengan role 'apoteker' (Role-Based)
+// dan hanya bisa menghapus obat miliknya sendiri (Resource-Based)
+$app->delete('/obat-otorisasi/{id}', function (Request $request, Response $response, $args) {
+
+    $obatId = $args['id'];
+
+    $token = $request->getAttribute("token");
+    $currentUserId = is_array($token)
+        ? ($token['uid'] ?? null)
+        : ($token->uid ?? null);
+
+    $db = $this->get('db');
+    $obat = $db->table('obat')->where('id', $obatId)->first();
+
+    if (!$obat) {
+        $response->getBody()->write(json_encode([
+            "error" => "Obat tidak ditemukan"
+        ]));
+
+        return $response
+            ->withStatus(404)
+            ->withHeader('Content-Type', 'application/json');
+    }
+
+    // Otorisasi resource
+    if ($obat->sku != $currentUserId) {
+        $response->getBody()->write(json_encode([
+            "error" => "Unauthorized: Anda bukan pemilik data obat ini!"
+        ]));
+
+        return $response
+            ->withStatus(403)
+            ->withHeader('Content-Type', 'application/json');
+    }
+
+    // Hapus data
+    // 1. Hapus riwayat obat ini di tabel anaknya dulu (detail_resep)
+    $db->table('detail_resep')->where('id_obat', $obatId)->delete();
+
+    // 2. Setelah anaknya bersih, baru hapus induknya (obat)
+    $db->table('obat')->where('id', $obatId)->delete();
+    $response->getBody()->write(json_encode([
+        "status" => "success",
+        "message" => "Data obat Anda berhasil dihapus."
+    ]));
+
+    return $response
+        ->withStatus(200)
+        ->withHeader('Content-Type', 'application/json');
+
+})
+
+->add(new \App\Application\Middleware\RoleMiddleware('apoteker'))
+
+->add(new \Tuupola\Middleware\JwtAuthentication([
+    "secret" => "bonagantengbgt",
+
+    "error" => function ($response, $arguments) {
+
+        $data["status"] = "error";
+        $data["message"] = $arguments["message"];
+
+        $response->getBody()->write(
+            json_encode($data, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)
+        );
+
+        return $response->withHeader(
+            "Content-Type",
+            "application/json"
+        );
+    }
+])); 
+
+
+
+    
+
 
 //Route untuk menggenerate swagger JSON
  $app->get('/swagger.json', function (
@@ -1094,22 +1176,6 @@ $app->post('/postmhs', function (Request $request, Response $response) {
 
 
 
-    $app->options('/{routes:.*}', function (Request $request, Response $response) {
-        // CORS Pre-Flight OPTIONS Request Handler
-        return $response;
-    });
-
-    $app->get('/', function (Request $request, Response $response) {
-        $response->getBody()->write('Hello world!');
-        return $response;
-    });
-
-    $app->group('/users', function (Group $group) {
-        $group->get('', ListUsersAction::class);
-        $group->get('/{id}', ViewUserAction::class);
-    });
-
-
 
 
 
@@ -1134,3 +1200,4 @@ $app->post('/postmhs', function (Request $request, Response $response) {
     });
 
     
+};
