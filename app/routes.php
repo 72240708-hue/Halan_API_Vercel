@@ -82,7 +82,7 @@ $app->get('/obat-secure', function (Request $request, Response $response) {
         }
 
         //kunci rahasia untuk JWT (sebaiknya disimpan di .env)
-        $secretKey = "bonagantengbgt";
+        $secretKey = "halanbaik";
 
         $payload = [
             "iat" => time(), // Issued at
@@ -116,7 +116,7 @@ $app->get('/obat-secure', function (Request $request, Response $response) {
         return $response->withStatus(200)->withHeader('Content-Type', 'application/json');
        
     })->add(new \Tuupola\Middleware\JwtAuthentication([
-        "secret" => "bonagantengbgt",
+        "secret" => "halanbaik",
         "error" => function ($response, $arguments) {
             $data["status"] = "error";
             $data["message"] = $arguments["message"];
@@ -125,6 +125,82 @@ $app->get('/obat-secure', function (Request $request, Response $response) {
               return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
         }
     ]));
+
+     $app->post('/obat-jwt', function (Request $request, Response $response) {
+        $data = $request->getParsedBody();
+        $db = $this->get('db');
+        $id_obat = $db->table('obat')->insertGetId([
+            'sku' => $data['sku'],
+            'label_catatan' => $data['label_catatan'],
+            'jumlah' => $data['jumlah']
+        ]);
+       $result = $db->table('obat')->where('id', $id_obat)->first();
+        $response->getBody()->write(json_encode($result));
+        return $response->withStatus(201)->withHeader('Content-Type', 'application/json');
+    })->add(new \Tuupola\Middleware\JwtAuthentication([
+        "secret" => "halanbaik",
+        "error" => function ($response, $arguments) {
+            $data["status"] = "error";
+            $data["message"] = $arguments["message"];
+            $response->getBody()->write(json_encode($data, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)
+            );
+              return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
+        }
+    ]));
+
+    $app->get('/obat-jwt/{id}', function ($request, $response, $args) {
+
+    $id = $args['id'];
+
+    $conn = new mysqli("localhost", "root", "", "api");
+
+    $sql = "SELECT * FROM obat WHERE id = '$id'";
+
+    $result = $conn->query($sql);
+
+    $data = $result->fetch_assoc();
+
+    $response->getBody()->write(json_encode($data));
+
+    return $response->withHeader('Content-Type', 'application/json');
+
+})->add(new \Tuupola\Middleware\JwtAuthentication([
+        "secret" => "halanbaik",
+        "error" => function ($response, $arguments) {
+            $data["status"] = "error";
+            $data["message"] = $arguments["message"];
+            $response->getBody()->write(json_encode($data, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)
+            );
+              return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
+        }
+    ]));
+
+    $app->put('/obat-jwt/{id}', function (Request $request, Response $response, array $args) {
+    $id = $args['id'];
+    $data = $request->getParsedBody();
+    $db = $this->get('db');
+    $db->table('obat')
+    ->where('id', $id)
+    ->update([
+        'sku' => $data['sku'],
+        'label_catatan' => $data['label_catatan'],
+        'jumlah' => $data['jumlah']
+    ]);
+    $result = $db->table('obat')->where('id', $id)->first();
+    $response->getBody()->write(json_encode($result));
+    return $response->withHeader('Content-Type', 'application/json');
+})->add(new \Tuupola\Middleware\JwtAuthentication([
+        "secret" => "halanbaik",
+        "error" => function ($response, $arguments) {
+            $data["status"] = "error";
+            $data["message"] = $arguments["message"];
+            $response->getBody()->write(json_encode($data, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)
+            );
+              return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
+        }
+    ]));
+
+    
 
     // 3. Hanya bisa diakses oleh user dengan role 'apoteker' (Role-Based)
 // dan hanya bisa menghapus obat miliknya sendiri (Resource-Based)
@@ -181,7 +257,7 @@ $app->delete('/obat-otorisasi/{id}', function (Request $request, Response $respo
 ->add(new \App\Application\Middleware\RoleMiddleware('apoteker'))
 
 ->add(new \Tuupola\Middleware\JwtAuthentication([
-    "secret" => "bonagantengbgt",
+    "secret" => "halanbaik",
 
     "error" => function ($response, $arguments) {
 
