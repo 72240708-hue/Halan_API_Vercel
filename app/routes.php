@@ -204,16 +204,14 @@ $app->get('/obat-secure', function (Request $request, Response $response) {
 
     // 3. Hanya bisa diakses oleh user dengan role 'apoteker' (Role-Based)
 // dan hanya bisa menghapus obat miliknya sendiri (Resource-Based)
+// HAPUS DATA OBAT
 $app->delete('/obat-otorisasi/{id}', function (Request $request, Response $response, $args) {
 
     $obatId = $args['id'];
 
-    $token = $request->getAttribute("token");
-    $currentUserId = is_array($token)
-        ? ($token['uid'] ?? null)
-        : ($token->uid ?? null);
-
     $db = $this->get('db');
+
+    // cek data obat
     $obat = $db->table('obat')->where('id', $obatId)->first();
 
     if (!$obat) {
@@ -226,26 +224,19 @@ $app->delete('/obat-otorisasi/{id}', function (Request $request, Response $respo
             ->withHeader('Content-Type', 'application/json');
     }
 
-    // Otorisasi resource
-    if ($obat->sku != $currentUserId) {
-        $response->getBody()->write(json_encode([
-            "error" => "Unauthorized: Anda bukan pemilik data obat ini!"
-        ]));
+    // hapus detail resep dulu
+    $db->table('detail_resep')
+        ->where('id_obat', $obatId)
+        ->delete();
 
-        return $response
-            ->withStatus(403)
-            ->withHeader('Content-Type', 'application/json');
-    }
+    // hapus data obat
+    $db->table('obat')
+        ->where('id', $obatId)
+        ->delete();
 
-    // Hapus data
-    // 1. Hapus riwayat obat ini di tabel anaknya dulu (detail_resep)
-    $db->table('detail_resep')->where('id_obat', $obatId)->delete();
-
-    // 2. Setelah anaknya bersih, baru hapus induknya (obat)
-    $db->table('obat')->where('id', $obatId)->delete();
     $response->getBody()->write(json_encode([
         "status" => "success",
-        "message" => "Data obat Anda berhasil dihapus."
+        "message" => "Data obat berhasil dihapus"
     ]));
 
     return $response
@@ -254,8 +245,10 @@ $app->delete('/obat-otorisasi/{id}', function (Request $request, Response $respo
 
 })
 
-->add(new \App\Application\Middleware\RoleMiddleware('apoteker'))
+// ROLE ADMIN
+->add(new \App\Application\Middleware\RoleMiddleware('admin'))
 
+// JWT
 ->add(new \Tuupola\Middleware\JwtAuthentication([
     "secret" => "halanbaik",
 
@@ -273,12 +266,7 @@ $app->delete('/obat-otorisasi/{id}', function (Request $request, Response $respo
             "application/json"
         );
     }
-])); 
-
-
-
-    
-
+]));
 
 //Route untuk menggenerate swagger JSON
  $app->get('/swagger.json', function (
@@ -1228,38 +1216,6 @@ $app->post('/postmhs', function (Request $request, Response $response) {
     return $response->withHeader('Content-Type', 'application/json');
 });
         
-  
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     $app->options('/{routes:.*}', function (Request $request, Response $response) {
         // CORS Pre-Flight OPTIONS Request Handler
         return $response;

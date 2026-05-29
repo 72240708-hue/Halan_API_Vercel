@@ -37,7 +37,14 @@ $container = $containerBuilder->build();
 // Instantiate the app
 AppFactory::setContainer($container);
 $app = AppFactory::create();
-$app->setBasePath('/Nama_Project/public');
+
+if (
+    !isset($_SERVER['VERCEL']) &&
+    strpos($_SERVER['REQUEST_URI'] ?? '', '/Nama_Project/public') === 0
+) {
+    $app->setBasePath('/Nama_Project/public');
+}
+
 $callableResolver = $app->getCallableResolver();
 
 // Register middleware
